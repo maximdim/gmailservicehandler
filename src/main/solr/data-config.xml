@@ -1,0 +1,13 @@
+<dataConfig>
+  <document>
+      <entity processor="GmailServiceUserMailEntityProcessor" 
+	serviceAccountId="111111111111@developer.gserviceaccount.com"
+	serviceAccountPkFile="c:\\1\\privatekey.p12"
+	domain="foo.com"
+	oldestDate="2013/06/01"
+	users="user1,user2,user3"
+	ignoreFrom="webmaster@foo.com,root@foo.com"
+	processAttachements="true"
+      />
+  </document>
+</dataConfig>
