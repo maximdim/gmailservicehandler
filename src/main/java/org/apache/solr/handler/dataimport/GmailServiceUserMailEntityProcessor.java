@@ -16,7 +16,13 @@
  */
 package org.apache.solr.handler.dataimport;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.Closeable;
 import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.io.InputStream;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -79,6 +85,7 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
   private static final String FROM = "from";
   private static final String FROM_CLEAN = "from_clean";
   private static final String SENT_DATE = "sentDate";
+  private static final String RECEIVED_DATE = "receivedDate";
   private static final String XMAILER = "xMailer";
   // multi valued
   private static final String TO_CC_BCC = "allTo";
@@ -101,13 +108,16 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
   private File serviceAccountPkFile;
   private String domain;
   private boolean processAttachments;
+  private File timestampFile;
+  // <User, Date>
+  private Map<String, Date> userTimestamps;
 
   private List<String> users;
   private List<String> ignoreFrom;
   
   private int userIndex;
-  private Date oldestDate;
   private UserMessagesIterator userMessagesIterator;
+
 
   @Override
   protected void firstInit(Context context) {
@@ -129,11 +139,19 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
     this.serviceAccountPkFile = new File(getStringFromContext("serviceAccountPkFile", null));
     this.domain = getStringFromContext("domain", null);
     this.processAttachments = Boolean.parseBoolean(getStringFromContext("processAttachments", null));
-    this.oldestDate = getDate(getStringFromContext("oldestDate", "2012/01/01"));
     this.users = Arrays.asList(getStringFromContext("users", null).split(","));
     this.ignoreFrom = Arrays.asList(getStringFromContext("ignoreFrom", null).split(","));
+    this.timestampFile = new File(getStringFromContext("timestampFile", null));
+    Date oldestDate = getDate(getStringFromContext("oldestDate", "2012/01/01"));
+    this.userTimestamps = loadTimestamp(this.timestampFile, oldestDate);
   }
 
+  @Override
+  public void close() {
+    saveTimestamp(this.userTimestamps, this.timestampFile);
+    super.close();
+  }
+  
   @Override
   public Map<String, Object> nextRow() {
     //LOG.info("gmail nextRow()");
@@ -148,7 +166,8 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
         try {
           LOG.info("Starting processing " + email);
           IMAPStore store = getStore(email);
-          this.userMessagesIterator = new UserMessagesIterator(store, this.oldestDate);
+          Date from = this.userTimestamps.get(user);
+          this.userMessagesIterator = new UserMessagesIterator(store, from);
           continue;
         } catch (Exception e) {
           throw new DataImportHandlerException(DataImportHandlerException.SEVERE, "Message retreival failed for "
@@ -167,9 +186,13 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
       if (row == null) {
         continue;
       }
+      
+      // save user
       row.put(USER_ID, user);
-//      LOG.info("From: "+row.get(FROM));
-//      LOG.info("To: "+row.get(TO_CC_BCC));
+      // update timestamp
+      if (row.containsKey(RECEIVED_DATE)) {
+        this.userTimestamps.put(user, (Date)row.get(RECEIVED_DATE));
+      }
       return row;
     }
   }
@@ -336,9 +359,17 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
     row.put(MESSAGE_ID, mail.getMessageID());
     row.put(SUBJECT, mail.getSubject());
 
-    Date d = mail.getSentDate();
-    if (d != null) {
-      row.put(SENT_DATE, d);
+    {
+      Date d = mail.getSentDate();
+      if (d != null) {
+        row.put(SENT_DATE, d);
+      }
+    }
+    {
+      Date d = mail.getReceivedDate();
+      if (d != null) {
+        row.put(RECEIVED_DATE, d);
+      }
     }
 
     List<String> flags = new ArrayList<String>();
@@ -401,6 +432,9 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
         return mail.toLowerCase();
       }
     }
+    else {
+      return a.trim().toLowerCase();
+    }
     return null;
   }
   
@@ -416,7 +450,7 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
   }
 
   private Date getDate(String d) {
-    SimpleDateFormat df = new SimpleDateFormat("yyyy/MM/dd");
+    SimpleDateFormat df = new SimpleDateFormat(DATE_FORMAT);
     try {
       return df.parse(d);
     } catch (ParseException e) {
@@ -432,6 +466,90 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
       v = val;
     }
     return v;
+  }
+  
+  private static final String DATE_FORMAT = "yyyy-MM-dd";
+  private static final String DATE_TIME_FORMAT = DATE_FORMAT+"'T'HH:mm:ss";
+  
+  /**
+   * load saved timestamp file (if available)
+   * @param oldestDate 
+   * @throws IOException 
+   */
+  private Map<String, Date> loadTimestamp(File f, Date defaultDate) {
+    Map<String, Date> result = new HashMap<String, Date>();
+    if (f.exists() && f.canRead()) {
+      @SuppressWarnings("resource")
+      BufferedReader br = null;
+      try {
+        br = new BufferedReader(new FileReader(f));
+        String line = null;
+        SimpleDateFormat df = new SimpleDateFormat(DATE_TIME_FORMAT);
+        while((line = br.readLine()) != null) {
+          String[] ss = line.split("=");
+          if (ss.length != 2) {
+            LOG.warn("Don't understand line ["+line+"]");
+            continue;
+          }
+          try {
+            result.put(ss[0], df.parse(ss[1]));
+          } 
+          catch (ParseException e) {
+            LOG.warn("Unable to parse date ["+ss[1]+"]");
+            continue;
+          }
+        }
+      } 
+      catch (IOException e) {
+        LOG.error("Error loading user timestamps from "+f.getAbsolutePath()+": "+e.getMessage(), e);
+      }
+      finally {
+        close(br);
+      }
+    }
+    // fill with defaults
+    for(String user: this.users) {
+      if (!result.containsKey(user)) {
+        result.put(user, defaultDate);
+      }
+    }
+    // log
+    for(Map.Entry<String, Date> me: result.entrySet()) {
+      LOG.info(me.getKey()+"="+me.getValue());
+    }
+    return result;
+  }
+  
+  private void saveTimestamp(Map<String, Date> data, File f) {
+    @SuppressWarnings("resource")
+    BufferedWriter bw = null;
+    try {
+      bw = new BufferedWriter(new FileWriter(f));
+      SimpleDateFormat df = new SimpleDateFormat(DATE_TIME_FORMAT);
+      for(Map.Entry<String, Date> me: data.entrySet()) {
+        String line = me.getKey()+"="+df.format(me.getValue());
+        bw.write(line + "\n");
+        LOG.info(line);
+      }
+      bw.flush();
+    }
+    catch (IOException e) {
+      LOG.error("Error saving user timestamps to "+f.getAbsolutePath()+": "+e.getMessage(), e);
+    }
+    finally {
+      close(bw);
+    }
+  }
+  
+  private void close(Closeable c) {
+    if (c != null) {
+      try {
+        c.close();
+      }
+      catch (IOException e) {
+        LOG.warn("Error closing Closeable: "+e.getMessage(), e);
+      }
+    }
   }
   
 }

@@ -345,6 +345,7 @@
    <field name="from" type="string" indexed="false" stored="true" omitNorms="true"/>
    <field name="from_clean" type="string" indexed="true" stored="true" omitNorms="true"/>
    <field name="sentDate" type="date" indexed="true" stored="true"/>
+   <field name="receivedDate" type="date" indexed="true" stored="true"/>
    <field name="xMailer" type="string" indexed="false" stored="false" omitNorms="true"/>
 
    <field name="allTo" type="string" indexed="false" stored="true" omitNorms="true" multiValued="true"/>

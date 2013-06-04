@@ -14,8 +14,10 @@ public class GmailServiceUserMailEntityProcessorTest {
     Entity entity = new Entity();
     entity.allAttributes = new HashMap<String, String>();
     entity.allAttributes.put("serviceAccountId", System.getProperty("serviceAccountId"));
+    entity.allAttributes.put("serviceAccountPkFile", System.getProperty("serviceAccountPkFile"));
     entity.allAttributes.put("domain", System.getProperty("domain"));
     entity.allAttributes.put("oldestDate", System.getProperty("oldestDate"));
+    entity.allAttributes.put("timestampFile", System.getProperty("timestampFile"));
     entity.allAttributes.put("users", System.getProperty("users"));
     entity.allAttributes.put("ignoreFrom", System.getProperty("ignoreFrom"));
     entity.allAttributes.put("processAttachements", System.getProperty("processAttachements"));
@@ -27,6 +29,7 @@ public class GmailServiceUserMailEntityProcessorTest {
     while((row = p.nextRow()) != null) {
       System.out.println(row);
     }
+    p.close();
     
   }
 
