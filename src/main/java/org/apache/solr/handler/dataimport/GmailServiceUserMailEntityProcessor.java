@@ -73,6 +73,7 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
 
   // Fields To Index
   // single valued
+  private static final String USER_ID = "userId";
   private static final String MESSAGE_ID = "messageId";
   private static final String SUBJECT = "subject";
   private static final String FROM = "from";
@@ -141,7 +142,8 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
         return null;
       }
 
-      String email = this.users.get(this.userIndex) + "@" + this.domain;
+      String user = this.users.get(this.userIndex);
+      String email = user + "@" + this.domain;
       if (this.userMessagesIterator == null) {
         try {
           LOG.info("Starting processing " + email);
@@ -154,8 +156,7 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
         }
       }
 
-      if (!this.userMessagesIterator.hasNext()) { // no more messages for this
-                                                  // user
+      if (!this.userMessagesIterator.hasNext()) { // no more messages for this user
         this.userIndex++;
         this.userMessagesIterator = null;
         continue;
@@ -166,6 +167,7 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
       if (row == null) {
         continue;
       }
+      row.put(USER_ID, user);
 //      LOG.info("From: "+row.get(FROM));
 //      LOG.info("To: "+row.get(TO_CC_BCC));
       return row;
