@@ -189,6 +189,8 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
       
       // save user
       row.put(USER_ID, user);
+      updateMessageId(row);
+      
       // update timestamp
       if (row.containsKey(RECEIVED_DATE)) {
         this.userTimestamps.put(user, (Date)row.get(RECEIVED_DATE));
@@ -197,6 +199,17 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
     }
   }
 
+  // modify messageId to include user and time (not sure if messageId is unique across many users)
+  private void updateMessageId(Map<String, Object> row) {
+    String user = (String)row.get(USER_ID);
+    String id = (String)row.get(MESSAGE_ID);
+    Date receivedDate = (Date)row.get(RECEIVED_DATE);
+    SimpleDateFormat df = new SimpleDateFormat(ID_DATE_TIME_FORMAT);
+    String date = receivedDate != null ? df.format(receivedDate) : "unknown";
+    row.put(MESSAGE_ID, user+":"+date+":"+id);
+    
+  }
+  
   private IMAPStore getStore(String email) throws Exception {
     String authToken = OAuth2Authenticator.getToken(this.serviceAccountPkFile, this.serviceAccountId, email);
     LOG.info("authToken OK");
@@ -478,6 +491,7 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
   
   private static final String DATE_FORMAT = "yyyy-MM-dd";
   private static final String DATE_TIME_FORMAT = DATE_FORMAT+"'T'HH:mm:ssZ";
+  private static final String ID_DATE_TIME_FORMAT = "yyyyMMddHHmmss";
   
   /**
    * load saved timestamp file (if available)
