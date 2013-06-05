@@ -207,7 +207,7 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
   }
 
   static class UserMessagesIterator implements Iterator<Message> {
-    private final Message[] messages;
+    private final List<Message> messages;
     private int index;
 
     public UserMessagesIterator(IMAPStore store, Date fetchFrom) throws MessagingException {
@@ -216,13 +216,13 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
 
     @Override
     public boolean hasNext() {
-      LOG.info(this.index+"/"+this.messages.length);
-      return this.index < this.messages.length;
+      LOG.info(this.index+"/"+this.messages.size());
+      return this.index < this.messages.size();
     }
 
     @Override
     public Message next() {
-      return this.messages[this.index++];
+      return this.messages.get(this.index++);
     }
 
     @Override
@@ -230,7 +230,7 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
       throw new UnsupportedOperationException();
     }
 
-    private Message[] getMessages(IMAPStore store, Date fetchFrom) throws MessagingException {
+    private List<Message> getMessages(IMAPStore store, Date fetchFrom) throws MessagingException {
       Folder folder = store.getFolder("[Gmail]/All Mail");
       folder.open(Folder.READ_ONLY);
       LOG.info("imap folder open OK");
@@ -238,6 +238,7 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
       int totalMessages = folder.getMessageCount();
       LOG.info("Total messages: " + totalMessages);
 
+      // IMAP search command disregards time, only date is used
       SearchTerm st = new ReceivedDateTerm(ComparisonTerm.GE, fetchFrom);
       Message[] messages = folder.search(st);
       LOG.info("Search returned: " + messages.length);
@@ -247,7 +248,14 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
       fp.add("X-mailer");
       folder.fetch(messages, fp);
 
-      return messages;
+      List<Message> result = new ArrayList<Message>();
+      for(Message m: messages) {
+        if (m.getReceivedDate() != null && m.getReceivedDate().after(fetchFrom)) {
+          result.add(m);
+        }
+      }
+      LOG.info("Result filtered to: " + result.size());
+      return result;
     }
 
   }
@@ -469,7 +477,7 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
   }
   
   private static final String DATE_FORMAT = "yyyy-MM-dd";
-  private static final String DATE_TIME_FORMAT = DATE_FORMAT+"'T'HH:mm:ss";
+  private static final String DATE_TIME_FORMAT = DATE_FORMAT+"'T'HH:mm:ssZ";
   
   /**
    * load saved timestamp file (if available)
