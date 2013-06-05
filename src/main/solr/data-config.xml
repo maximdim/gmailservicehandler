@@ -1,6 +1,6 @@
 <dataConfig>
   <document>
-      <entity processor="GmailServiceUserMailEntityProcessor" 
+      <entity name="gmail" processor="GmailServiceUserMailEntityProcessor" 
 	serviceAccountId="111111111111@developer.gserviceaccount.com"
 	serviceAccountPkFile="/tmp/privatekey.p12"
 	domain="foo.com"
