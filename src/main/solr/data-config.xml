@@ -8,7 +8,6 @@
 	users="user1,user2,user3"
 	ignoreFrom="webmaster@foo.com,root@foo.com"
 	timestampFile="/tmp/gmail.properties"
-	processAttachements="true"
       />
   </document>
 </dataConfig>

@@ -107,7 +107,6 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
   private String serviceAccountId;
   private File serviceAccountPkFile;
   private String domain;
-  private boolean processAttachments;
   private File timestampFile;
   // <User, Date>
   private Map<String, Date> userTimestamps;
@@ -138,12 +137,19 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
     this.serviceAccountId = getStringFromContext("serviceAccountId", null);
     this.serviceAccountPkFile = new File(getStringFromContext("serviceAccountPkFile", null));
     this.domain = getStringFromContext("domain", null);
-    this.processAttachments = Boolean.parseBoolean(getStringFromContext("processAttachments", null));
     this.users = Arrays.asList(getStringFromContext("users", null).split(","));
     this.ignoreFrom = Arrays.asList(getStringFromContext("ignoreFrom", null).split(","));
     this.timestampFile = new File(getStringFromContext("timestampFile", null));
     Date oldestDate = getDate(getStringFromContext("oldestDate", "2012/01/01"));
     this.userTimestamps = loadTimestamp(this.timestampFile, oldestDate);
+    
+    LOG.info("serviceAccountId: "+this.serviceAccountId);
+    LOG.info("serviceAccountPkFile: "+this.serviceAccountPkFile);
+    LOG.info("domain: "+this.domain);
+    LOG.info("users: "+this.users);
+    LOG.info("ignoreFrom: "+this.ignoreFrom);
+    LOG.info("timestampFile: "+this.timestampFile);
+    LOG.info("oldestDate: "+oldestDate);
   }
 
   @Override
@@ -304,13 +310,12 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
       for (int i = 0; i < count; i++) {
         addPartToDocument(mp.getBodyPart(i), row, false);
       }
-    } else if (part.isMimeType("message/rfc822")) {
+    } 
+    else if (part.isMimeType("message/rfc822")) {
       addPartToDocument((Part) part.getContent(), row, false);
-    } else {
+    } 
+    else {
       String disp = part.getDisposition();
-      if (!this.processAttachments || disp != null && disp.equalsIgnoreCase(Part.ATTACHMENT)) {
-        return true;
-      }
       @SuppressWarnings("resource") // Tika will close stream
       InputStream is = part.getInputStream();
       String fileName = part.getFileName();
@@ -331,7 +336,8 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
         List<String> names = (List<String>) row.get(ATTACHMENT_NAMES);
         names.add(fileName);
         row.put(ATTACHMENT_NAMES, names);
-      } else {
+      } 
+      else {
         if (row.get(CONTENT) == null) {
           row.put(CONTENT, new ArrayList<String>());
         }
