@@ -52,6 +52,7 @@ import javax.mail.search.ComparisonTerm;
 import javax.mail.search.ReceivedDateTerm;
 import javax.mail.search.SearchTerm;
 
+import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.tika.Tika;
 import org.apache.tika.metadata.HttpHeaders;
 import org.apache.tika.metadata.Metadata;
@@ -90,6 +91,9 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
   // first 'To' address - need it for sorting. Sort is impossible for multivalued fields
   private static final String TO = "to";
   private static final String TO_CLEAN = "to_clean";
+  // hash of the important fields
+  private static final String HASH = "hash";
+  
   // multi valued
   private static final String TO_CC_BCC = "allTo";
   private static final String TO_CC_BCC_CLEAN = "allTo_clean";
@@ -296,10 +300,12 @@ public class GmailServiceUserMailEntityProcessor extends EntityProcessorBase {
   }
 
   public boolean addPartToDocument(Part part, Map<String, Object> row, boolean outerMost) throws Exception {
-    if (part instanceof Message) {
+    if (outerMost && part instanceof Message) {
       if (!addEnvelopToDocument(part, row)) {
         return false;
       }
+      // store hash
+      row.put(HASH, DigestUtils.md5Hex((String)row.get(FROM_CLEAN)+""+(String)row.get(SUBJECT)));
     }
 
     String ct = part.getContentType();
